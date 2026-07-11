@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3-Tier IaC POC</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; }
+    .msg { background: #f0f4f8; padding: 12px; border-radius: 6px; margin: 8px 0; }
+    .meta { color: #667; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>3-Tier Application POC</h1>
+  <p>Web tier (nginx) &rarr; App tier (Flask API) &rarr; DB tier (PostgreSQL)</p>
+  <div id="status">Loading messages from the API...</div>
+  <div id="messages"></div>
+  <script>
+    fetch('/api/messages')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('status').textContent =
+          'Fetched ' + data.messages.length + ' message(s) via Web -> App -> DB:';
+        document.getElementById('messages').innerHTML = data.messages.map(m =>
+          '<div class="msg">' + m.content +
+          '<div class="meta">#' + m.id + ' &middot; ' + m.created_at + '</div></div>'
+        ).join('');
+      })
+      .catch(e => {
+        document.getElementById('status').textContent = 'API error: ' + e;
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+---
+control_ip: 192.168.56.5
+web_ip: 192.168.56.10
+app_ip: 192.168.56.30
+db_ip: 192.168.56.20
+
+app_port: 5000
+db_port: 5432
+
+db_name: pocdb
+db_user: pocuser
+db_password: ChangeMe_S3cure!

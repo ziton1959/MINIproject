@@ -1,0 +1,79 @@
+---
+- name: Install PostgreSQL and Python bindings
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+      - acl
+    state: present
+
+- name: Ensure PostgreSQL is running and enabled
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Listen on internal network interface
+  lineinfile:
+    path: /etc/postgresql/12/main/postgresql.conf
+    regexp: '^#?listen_addresses'
+    line: "listen_addresses = 'localhost,{{ db_ip }}'"
+  notify: restart postgresql
+
+- name: Allow app tier to authenticate
+  lineinfile:
+    path: /etc/postgresql/12/main/pg_hba.conf
+    line: "host {{ db_name }} {{ db_user }} {{ app_ip }}/32 md5"
+    state: present
+  notify: restart postgresql
+
+- name: Flush handlers so config is live before creating objects
+  meta: flush_handlers
+
+- name: Create application database
+  become_user: postgres
+  postgresql_db:
+    name: "{{ db_name }}"
+    state: present
+
+- name: Create application DB user
+  become_user: postgres
+  postgresql_user:
+    db: "{{ db_name }}"
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    priv: ALL
+    state: present
+
+- name: Create sample table with seed data
+  become_user: postgres
+  postgresql_query:
+    db: "{{ db_name }}"
+    query: |
+      CREATE TABLE IF NOT EXISTS messages (
+        id SERIAL PRIMARY KEY,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      INSERT INTO messages (content)
+      SELECT 'Hello from the DB tier!'
+      WHERE NOT EXISTS (SELECT 1 FROM messages);
+
+- name: Grant table privileges to app user
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ db_name }}"
+    role: "{{ db_user }}"
+    objs: ALL_IN_SCHEMA
+    type: table
+    privs: SELECT,INSERT,UPDATE,DELETE
+
+- name: Grant sequence privileges to app user
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ db_name }}"
+    role: "{{ db_user }}"
+    objs: ALL_IN_SCHEMA
+    type: sequence
+    privs: USAGE,SELECT

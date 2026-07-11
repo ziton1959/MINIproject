@@ -1,0 +1,6 @@
+---
+- name: restart pocapi
+  systemd:
+    name: pocapi
+    state: restarted
+    daemon_reload: yes

@@ -1,0 +1,53 @@
+---
+# ---- Rules common to all tiers ----
+- name: Allow SSH from control node only
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    from_ip: "{{ control_ip }}"
+
+# ---- Web tier: public 80/443 ----
+- name: Allow HTTP on web tier
+  ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+  when: "'web' in group_names"
+
+- name: Allow HTTPS on web tier
+  ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+  when: "'web' in group_names"
+
+# ---- App tier: app port from web only ----
+- name: Allow app port from web tier only
+  ufw:
+    rule: allow
+    port: "{{ app_port }}"
+    proto: tcp
+    from_ip: "{{ web_ip }}"
+  when: "'app' in group_names"
+
+# ---- DB tier: db port from app only ----
+- name: Allow DB port from app tier only
+  ufw:
+    rule: allow
+    port: "{{ db_port }}"
+    proto: tcp
+    from_ip: "{{ app_ip }}"
+  when: "'db' in group_names"
+
+# ---- Enable with default deny (LAST, after allow rules exist) ----
+- name: Enable UFW with default deny incoming
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Set default allow outgoing
+  ufw:
+    policy: allow
+    direction: outgoing

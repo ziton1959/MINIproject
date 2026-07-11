@@ -1,0 +1,12 @@
+[Unit]
+Description=POC Backend API
+After=network.target
+
+[Service]
+User=pocapp
+WorkingDirectory=/opt/pocapi
+ExecStart=/usr/bin/python3 /opt/pocapi/app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,46 @@
+---
+- name: Install Python packages for the API
+  apt:
+    name:
+      - python3-flask
+      - python3-psycopg2
+      - acl
+    state: present
+
+- name: Create dedicated service user
+  user:
+    name: pocapp
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Create application directory
+  file:
+    path: /opt/pocapi
+    state: directory
+    owner: pocapp
+    group: pocapp
+    mode: '0755'
+
+- name: Deploy the API application
+  template:
+    src: app.py.j2
+    dest: /opt/pocapi/app.py
+    owner: pocapp
+    group: pocapp
+    mode: '0644'
+  notify: restart pocapi
+
+- name: Deploy the systemd service
+  template:
+    src: pocapi.service.j2
+    dest: /etc/systemd/system/pocapi.service
+    mode: '0644'
+  notify: restart pocapi
+
+- name: Enable and start the API service
+  systemd:
+    name: pocapi
+    state: started
+    enabled: yes
+    daemon_reload: yes
