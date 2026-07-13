@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import psycopg2
 
 app = Flask(__name__)
@@ -10,22 +10,68 @@ DB_CONFIG = {
     "password": "{{ db_password }}",
 }
 
+def query(sql, params=None, fetch=False):
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute(sql, params or ())
+    rows = cur.fetchall() if fetch else None
+    conn.commit()
+    cur.close()
+    conn.close()
+    return rows
+
 @app.route("/api/health")
 def health():
     return jsonify(status="ok", tier="app")
 
-@app.route("/api/messages")
-def messages():
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    cur.execute("SELECT id, content, created_at FROM messages ORDER BY id;")
-    rows = [
-        {"id": r[0], "content": r[1], "created_at": str(r[2])}
-        for r in cur.fetchall()
-    ]
-    cur.close()
-    conn.close()
-    return jsonify(messages=rows)
+# READ
+@app.route("/api/messages", methods=["GET"])
+def list_messages():
+    rows = query(
+        "SELECT id, content, created_at FROM messages ORDER BY id;", fetch=True
+    )
+    return jsonify(messages=[
+        {"id": r[0], "content": r[1], "created_at": str(r[2])} for r in rows
+    ])
+
+# CREATE
+@app.route("/api/messages", methods=["POST"])
+def create_message():
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify(error="content is required"), 400
+    rows = query(
+        "INSERT INTO messages (content) VALUES (%s) RETURNING id;",
+        (content,), fetch=True
+    )
+    return jsonify(id=rows[0][0], content=content), 201
+
+# UPDATE
+@app.route("/api/messages/<int:msg_id>", methods=["PUT"])
+def update_message(msg_id):
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify(error="content is required"), 400
+    rows = query(
+        "UPDATE messages SET content = %s WHERE id = %s RETURNING id;",
+        (content, msg_id), fetch=True
+    )
+    if not rows:
+        return jsonify(error="not found"), 404
+    return jsonify(id=msg_id, content=content)
+
+# DELETE
+@app.route("/api/messages/<int:msg_id>", methods=["DELETE"])
+def delete_message(msg_id):
+    rows = query(
+        "DELETE FROM messages WHERE id = %s RETURNING id;",
+        (msg_id,), fetch=True
+    )
+    if not rows:
+        return jsonify(error="not found"), 404
+    return jsonify(deleted=msg_id)
 
 if __name__ == "__main__":
     app.run(host="{{ app_ip }}", port={{ app_port }})

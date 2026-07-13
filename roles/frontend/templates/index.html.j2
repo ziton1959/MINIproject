@@ -1,32 +1,128 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3-Tier IaC POC</title>
-  <style>
-    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; }
-    .msg { background: #f0f4f8; padding: 12px; border-radius: 6px; margin: 8px 0; }
-    .meta { color: #667; font-size: 0.85em; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3-Tier IaC POC</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --accent:#38bdf8; --text:#e2e8f0; --muted:#94a3b8; --danger:#f87171; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text);
+         max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 1.6em; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 8px; }
+  .tiers { display: flex; gap: 8px; margin: 16px 0 28px; }
+  .tier { background: var(--card); border-radius: 8px; padding: 10px 14px; font-size: .85em;
+          border-left: 3px solid var(--accent); flex: 1; }
+  .tier b { display: block; color: var(--accent); }
+  form { display: flex; gap: 8px; margin-bottom: 24px; }
+  input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+          background: var(--card); color: var(--text); font-size: 1em; }
+  button { padding: 10px 16px; border-radius: 8px; border: none; background: var(--accent);
+           color: #082f49; font-weight: 600; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  .msg { background: var(--card); border-radius: 10px; padding: 14px 16px; margin: 10px 0;
+         display: flex; align-items: center; gap: 12px; }
+  .msg .content { flex: 1; }
+  .msg .meta { color: var(--muted); font-size: .78em; margin-top: 4px; }
+  .msg button { padding: 6px 10px; font-size: .8em; }
+  .msg .del { background: var(--danger); color: #450a0a; }
+  #status { color: var(--muted); font-size: .9em; min-height: 1.2em; margin-bottom: 8px; }
+</style>
 </head>
 <body>
   <h1>3-Tier Application POC</h1>
-  <p>Web tier (nginx) &rarr; App tier (Flask API) &rarr; DB tier (PostgreSQL)</p>
-  <div id="status">Loading messages from the API...</div>
+  <div class="subtitle">Full CRUD through the stack &mdash; every action below travels Web &rarr; App &rarr; DB</div>
+  <div class="tiers">
+    <div class="tier"><b>WEB</b>nginx &middot; {{ web_ip }}</div>
+    <div class="tier"><b>APP</b>Flask API &middot; {{ app_ip }}:{{ app_port }}</div>
+    <div class="tier"><b>DB</b>PostgreSQL &middot; {{ db_ip }} (internal)</div>
+  </div>
+
+  <form id="createForm">
+    <input type="text" id="newContent" placeholder="Write a new message..." required>
+    <button type="submit">Add</button>
+  </form>
+
+  <div id="status"></div>
   <div id="messages"></div>
-  <script>
-    fetch('/api/messages')
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('status').textContent =
-          'Fetched ' + data.messages.length + ' message(s) via Web -> App -> DB:';
-        document.getElementById('messages').innerHTML = data.messages.map(m =>
-          '<div class="msg">' + m.content +
-          '<div class="meta">#' + m.id + ' &middot; ' + m.created_at + '</div></div>'
-        ).join('');
-      })
-      .catch(e => {
-        document.getElementById('status').textContent = 'API error: ' + e;
-      });
-  </script>
+
+<script>
+const statusEl = document.getElementById('status');
+const listEl = document.getElementById('messages');
+
+function setStatus(t) { statusEl.textContent = t; }
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+  return r.json();
+}
+
+async function load() {
+  try {
+    const data = await api('/api/messages');
+    setStatus(data.messages.length + ' message(s) in the DB tier');
+    listEl.innerHTML = '';
+    data.messages.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'msg';
+      const body = document.createElement('div');
+      body.className = 'content';
+      body.textContent = m.content;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = '#' + m.id + ' · ' + m.created_at;
+      body.appendChild(meta);
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => editMessage(m.id, m.content);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.className = 'del';
+      delBtn.onclick = () => delMessage(m.id);
+      div.append(body, editBtn, delBtn);
+      listEl.appendChild(div);
+    });
+  } catch (e) { setStatus('Error: ' + e.message); }
+}
+
+document.getElementById('createForm').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const input = document.getElementById('newContent');
+  try {
+    await api('/api/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: input.value})
+    });
+    input.value = '';
+    load();
+  } catch (e) { setStatus('Error: ' + e.message); }
+};
+
+async function editMessage(id, current) {
+  const next = prompt('Edit message:', current);
+  if (next === null || !next.trim()) return;
+  try {
+    await api('/api/messages/' + id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: next})
+    });
+    load();
+  } catch (e) { setStatus('Error: ' + e.message); }
+}
+
+async function delMessage(id) {
+  if (!confirm('Delete message #' + id + '?')) return;
+  try {
+    await api('/api/messages/' + id, { method: 'DELETE' });
+    load();
+  } catch (e) { setStatus('Error: ' + e.message); }
+}
+
+load();
+</script>
 </body>
 </html>

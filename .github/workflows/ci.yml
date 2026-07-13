@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible and ansible-lint
+        run: pip install ansible ansible-lint
+
+      - name: Playbook syntax check
+        run: ansible-playbook site.yml --syntax-check -i inventory/hosts.ini
+
+      - name: Lint Ansible roles
+        run: ansible-lint || true
