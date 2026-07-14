@@ -19,3 +19,13 @@ jobs:
 
       - name: Lint Ansible roles
         run: ansible-lint || true
+
+  deploy:
+    needs: lint-and-validate
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to environment
+        run: ansible-playbook site.yml -i inventory/hosts.ini
